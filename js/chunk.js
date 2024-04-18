@@ -5,149 +5,168 @@
  * The array is internally stored a sequence of integers, and bitwise
  * operations are used to set and retrieve cell values.
  */
-const Chunk = (function () {
-  "use strict";
+const { add, divide, multiply } = require("./math2d");
 
-  const { add, multiply } = Math2D;
+/**
+ * Check if [x, y] is outside the chunk.
+ */
+function outOfBound([x, y]) {
+	return x < 0 || x >= Chunk.SIZE || y < 0 || y >= Chunk.SIZE;
+}
 
-  /**
-   * Check if [x, y] is outside the chunk.
-   */
-  function outOfBound([x, y]) {
-    return x < 0 || x >= Chunk.SIZE || y < 0 || y >= Chunk.SIZE;
-  }
+/**
+ * Constructor.
+ */
+function Chunk() {
+	if (!(this instanceof Chunk)) {
+		return new Chunk();
+	}
 
-  /**
-   * Constructor.
-   */
-  function Chunk() {
-    if (!(this instanceof Chunk)) {
-      return new Chunk();
-    }
+	this._cells = Array(Chunk.SIZE).fill(0);
+}
 
-    this._cells = Array(Chunk.SIZE).fill(0);
-  }
+/**
+ * Chunk size. The absolute maximum value is 31 because JS's bitwise operations
+ * can only be safely performed on 31-bit integers, but it's good to keep it lower
+ * than 31 just in case.
+ */
+Chunk.SIZE = 24;
 
-  /**
-   * Chunk size. The absolute maximum value is 31 because JS's bitwise operations
-   * can only be safely performed on 31-bit integers, but it's good to keep it lower
-   * than 31 just in case.
-   */
-  Chunk.SIZE = 24;
+/**
+ * Correspond a global (2D world) position to a chunk position.
+ * @returns [xChunk, yChunk]
+ */
+Chunk.globalToChunkXY = function (coordGlobal, config) {
+	const { cellSize } = config;
+	return divide(coordGlobal, cellSize * Chunk.SIZE).map(Math.floor);
+};
 
-  Chunk.prototype.get = function ([x, y]) {
-    if (outOfBound([x, y]))
-      throw new RangeError(`Invalid coord [${x}, ${y}] in chunk`);
-    return !!((this._cells[x] >> y) & 1);
-  };
+/**
+ * Get the top left (global) coordinates of a chunk.
+ */
+Chunk.getTopLeftOfChunk = function (chunkXY, config) {
+	const { cellSize } = config;
+	return multiply(chunkXY, Chunk.SIZE * cellSize);
+};
 
-  Chunk.prototype.set = function ([x, y], value) {
-    if (outOfBound([x, y]))
-      throw new RangeError(`Invalid coord [${x}, ${y}] in chunk`);
-    value = !!value;
-    if (value) this._cells[x] |= 1 << y;
-    else this._cells[x] &= ~(1 << y);
-  };
+/**
+ * Correspond a local (within-the-chunk) position to a cell.
+ * @returns [x, y]
+ */
+Chunk.localToCell = function (localXY, config) {
+	const { cellSize } = config;
+	return divide(localXY, cellSize).map(Math.floor);
+};
 
-  /**
-   * Compute the next tick based on own cells and adjacent chunks,
-   * and store the result internally. The state should be updated on
-   * the next render() call.
-   * @param adjs a 3x3 array of adjacents. adjs[1][1] should be this chunk!
-   * @returns whether stasis has been reached within the chunk (i.e. nothing updated)
-   */
-  Chunk.prototype.computeNextTick = function (adjs) {
-    console.assert(adjs[1][1] === this);
+Chunk.prototype.get = function ([x, y]) {
+	if (outOfBound([x, y]))
+		throw new RangeError(`Invalid coord [${x}, ${y}] in chunk`);
+	return !!((this._cells[x] >> y) & 1);
+};
 
-    function getCellAt([x, y]) {
-      // Compute the chunk where the cell is located
-      const xChunkDelta = x < 0 ? -1 : x < Chunk.SIZE ? 0 : 1;
-      const yChunkDelta = y < 0 ? -1 : y < Chunk.SIZE ? 0 : 1;
-      // Compute the local cell XY within the correct chunk
-      const xLocal = (x + Chunk.SIZE) % Chunk.SIZE;
-      const yLocal = (y + Chunk.SIZE) % Chunk.SIZE;
+Chunk.prototype.set = function ([x, y], value) {
+	if (outOfBound([x, y]))
+		throw new RangeError(`Invalid coord [${x}, ${y}] in chunk`);
+	value = !!value;
+	if (value) this._cells[x] |= 1 << y;
+	else this._cells[x] &= ~(1 << y);
+};
 
-      return adjs[xChunkDelta + 1][yChunkDelta + 1]?.get([xLocal, yLocal]);
-    }
+/**
+ * Compute the next tick based on own cells and adjacent chunks,
+ * and store the result internally. The state should be updated on
+ * the next render() call.
+ * @param adjs a 3x3 array of adjacents. adjs[1][1] should be this chunk!
+ * @returns whether stasis has been reached within the chunk (i.e. nothing updated)
+ */
+Chunk.prototype.computeNextTick = function (adjs) {
+	console.assert(adjs[1][1] === this);
 
-    this._nextTick = [];
-    let stasisReached = true;
-    for (let x = 0; x < Chunk.SIZE; x++) {
-      let c = 0;
-      for (let y = 0; y < Chunk.SIZE; y++) {
-        const alive = getCellAt([x, y]);
-        let livingNeighbors = 0;
-        // Iterate over neighbors
-        for (let xDelta = -1; xDelta <= 1; xDelta++) {
-          for (let yDelta = -1; yDelta <= 1; yDelta++) {
-            // Skip the cell itself
-            if (xDelta === 0 && yDelta === 0) continue;
+	function getCellAt([x, y]) {
+		// Compute the chunk where the cell is located
+		const xChunkDelta = x < 0 ? -1 : x < Chunk.SIZE ? 0 : 1;
+		const yChunkDelta = y < 0 ? -1 : y < Chunk.SIZE ? 0 : 1;
+		// Compute the local cell XY within the correct chunk
+		const xLocal = (x + Chunk.SIZE) % Chunk.SIZE;
+		const yLocal = (y + Chunk.SIZE) % Chunk.SIZE;
 
-            if (getCellAt([x + xDelta, y + yDelta])) livingNeighbors++;
-          }
-        }
-        if (!alive && livingNeighbors === 3) {
-          c |= 1 << y;
-        }
-        if (alive && 2 <= livingNeighbors && livingNeighbors <= 3) {
-          c |= 1 << y;
-        }
-      }
-      stasisReached &&= c === this._cells[x];
-      this._nextTick.push(c);
-    }
+		return adjs[xChunkDelta + 1][yChunkDelta + 1]?.get([xLocal, yLocal]);
+	}
 
-    return stasisReached;
-  };
+	this._nextTick = [];
+	let stasisReached = true;
+	for (let x = 0; x < Chunk.SIZE; x++) {
+		let c = 0;
+		for (let y = 0; y < Chunk.SIZE; y++) {
+			const alive = getCellAt([x, y]);
+			let livingNeighbors = 0;
+			// Iterate over neighbors
+			for (let xDelta = -1; xDelta <= 1; xDelta++) {
+				for (let yDelta = -1; yDelta <= 1; yDelta++) {
+					// Skip the cell itself
+					if (xDelta === 0 && yDelta === 0) continue;
 
-  Chunk.prototype.setNextTick = function () {
-    console.assert(!!this._nextTick);
-    this._cells = this._nextTick;
-    this._nextTick = undefined;
-  };
+					if (getCellAt([x + xDelta, y + yDelta])) livingNeighbors++;
+				}
+			}
+			if (!alive && livingNeighbors === 3) {
+				c |= 1 << y;
+			}
+			if (alive && 2 <= livingNeighbors && livingNeighbors <= 3) {
+				c |= 1 << y;
+			}
+		}
+		stasisReached &&= c === this._cells[x];
+		this._nextTick.push(c);
+	}
 
-  Chunk.prototype.render = function ([xChunk, yChunk], view, config, ctx) {
-    const { pan, zoom } = view;
-    const { cellSize, cellColor } = config;
-    const cellSizeScreen = cellSize * zoom;
-    const offset = add(
-      multiply([xChunk, yChunk], Chunk.SIZE * cellSizeScreen),
-      pan
-    );
+	return stasisReached;
+};
 
-    ctx.fillStyle = cellColor;
-    for (let x = 0; x < Chunk.SIZE; x++) {
-      for (let y = 0, c = this._cells[x]; y < Chunk.SIZE; y++, c >>= 1) {
-        if (!(c & 1)) continue;
-        const [xScreen, yScreen] = add(
-          offset,
-          multiply([x, y], cellSizeScreen)
-        );
-        ctx.fillRect(xScreen, yScreen, cellSizeScreen, cellSizeScreen);
-      }
-    }
+Chunk.prototype.setNextTick = function () {
+	console.assert(!!this._nextTick);
+	this._cells = this._nextTick;
+	this._nextTick = undefined;
+};
 
-    // Draw chunk borders for debugging
-    function debug() {
-      const [xOffset, yOffset] = offset;
-      ctx.strokeStyle = "black";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(
-        xOffset,
-        yOffset,
-        Chunk.SIZE * cellSizeScreen,
-        Chunk.SIZE * cellSizeScreen
-      );
-      ctx.font = `${32 * zoom}px Arial`;
-      ctx.fillStyle = "gray";
-      ctx.fillText(
-        `Chunk x=${xChunk}, y=${yChunk}`,
-        xOffset,
-        yOffset + 32 * zoom
-      );
-    }
-    // debug();
-  };
+Chunk.prototype.render = function ([xChunk, yChunk], view, config, ctx) {
+	const { pan, zoom } = view;
+	const { cellSize, cellColor } = config;
+	const cellSizeScreen = cellSize * zoom;
+	const offset = add(
+		multiply([xChunk, yChunk], Chunk.SIZE * cellSizeScreen),
+		pan
+	);
 
-  return Chunk;
-})();
+	ctx.fillStyle = cellColor;
+	for (let x = 0; x < Chunk.SIZE; x++) {
+		for (let y = 0, c = this._cells[x]; y < Chunk.SIZE; y++, c >>= 1) {
+			if (!(c & 1)) continue;
+			const [xScreen, yScreen] = add(offset, multiply([x, y], cellSizeScreen));
+			ctx.fillRect(xScreen, yScreen, cellSizeScreen, cellSizeScreen);
+		}
+	}
+
+	// Draw chunk borders for debugging
+	function debug() {
+		const [xOffset, yOffset] = offset;
+		ctx.strokeStyle = "black";
+		ctx.lineWidth = 4;
+		ctx.strokeRect(
+			xOffset,
+			yOffset,
+			Chunk.SIZE * cellSizeScreen,
+			Chunk.SIZE * cellSizeScreen
+		);
+		ctx.font = `${32 * zoom}px Arial`;
+		ctx.fillStyle = "gray";
+		ctx.fillText(
+			`Chunk x=${xChunk}, y=${yChunk}`,
+			xOffset,
+			yOffset + 32 * zoom
+		);
+	}
+	// debug();
+};
+
+module.exports = Chunk;
