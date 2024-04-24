@@ -4,7 +4,7 @@ import { add, multiply } from "./math2d.mjs";
  * Check if [x, y] is outside the chunk.
  */
 function outOfBound([x, y]) {
-  return x < 0 || x >= Chunk.SIZE || y < 0 || y >= Chunk.SIZE;
+	return x < 0 || x >= Chunk.SIZE || y < 0 || y >= Chunk.SIZE;
 }
 
 /**
@@ -15,11 +15,11 @@ function outOfBound([x, y]) {
  * operations are used to set and retrieve cell values.
  */
 function Chunk() {
-  if (!(this instanceof Chunk)) {
-    return new Chunk();
-  }
+	if (!(this instanceof Chunk)) {
+		return new Chunk();
+	}
 
-  this._cells = Array(Chunk.SIZE).fill(0);
+	this._cells = Array(Chunk.SIZE).fill(0);
 }
 
 /**
@@ -30,17 +30,17 @@ function Chunk() {
 Chunk.SIZE = 24;
 
 Chunk.prototype.get = function ([x, y]) {
-  if (outOfBound([x, y]))
-    throw new RangeError(`Invalid coord [${x}, ${y}] in chunk`);
-  return !!((this._cells[x] >> y) & 1);
+	if (outOfBound([x, y]))
+		throw new RangeError(`Invalid coord [${x}, ${y}] in chunk`);
+	return !!((this._cells[x] >> y) & 1);
 };
 
 Chunk.prototype.set = function ([x, y], value) {
-  if (outOfBound([x, y]))
-    throw new RangeError(`Invalid coord [${x}, ${y}] in chunk`);
-  value = !!value;
-  if (value) this._cells[x] |= 1 << y;
-  else this._cells[x] &= ~(1 << y);
+	if (outOfBound([x, y]))
+		throw new RangeError(`Invalid coord [${x}, ${y}] in chunk`);
+	value = !!value;
+	if (value) this._cells[x] |= 1 << y;
+	else this._cells[x] &= ~(1 << y);
 };
 
 /**
@@ -51,93 +51,93 @@ Chunk.prototype.set = function ([x, y], value) {
  * @returns whether stasis has been reached within the chunk (i.e. nothing updated)
  */
 Chunk.prototype.computeNextTick = function (adjs) {
-  console.assert(adjs[1][1] === this);
+	console.assert(adjs[1][1] === this);
 
-  function getCellAt([x, y]) {
-    // Compute the chunk where the cell is located
-    const xChunkDelta = x < 0 ? -1 : x < Chunk.SIZE ? 0 : 1;
-    const yChunkDelta = y < 0 ? -1 : y < Chunk.SIZE ? 0 : 1;
-    // Compute the local cell XY within the correct chunk
-    const xLocal = (x + Chunk.SIZE) % Chunk.SIZE;
-    const yLocal = (y + Chunk.SIZE) % Chunk.SIZE;
+	function getCellAt([x, y]) {
+		// Compute the chunk where the cell is located
+		const xChunkDelta = x < 0 ? -1 : x < Chunk.SIZE ? 0 : 1;
+		const yChunkDelta = y < 0 ? -1 : y < Chunk.SIZE ? 0 : 1;
+		// Compute the local cell XY within the correct chunk
+		const xLocal = (x + Chunk.SIZE) % Chunk.SIZE;
+		const yLocal = (y + Chunk.SIZE) % Chunk.SIZE;
 
-    return adjs[xChunkDelta + 1][yChunkDelta + 1]?.get([xLocal, yLocal]);
-  }
+		return adjs[xChunkDelta + 1][yChunkDelta + 1]?.get([xLocal, yLocal]);
+	}
 
-  this._nextTick = [];
-  let stasisReached = true;
-  for (let x = 0; x < Chunk.SIZE; x++) {
-    let c = 0;
-    for (let y = 0; y < Chunk.SIZE; y++) {
-      const alive = getCellAt([x, y]);
-      let livingNeighbors = 0;
-      // Iterate over neighbors
-      for (let xDelta = -1; xDelta <= 1; xDelta++) {
-        for (let yDelta = -1; yDelta <= 1; yDelta++) {
-          // Skip the cell itself
-          if (xDelta === 0 && yDelta === 0) continue;
+	this._nextTick = [];
+	let stasisReached = true;
+	for (let x = 0; x < Chunk.SIZE; x++) {
+		let c = 0;
+		for (let y = 0; y < Chunk.SIZE; y++) {
+			const alive = getCellAt([x, y]);
+			let livingNeighbors = 0;
+			// Iterate over neighbors
+			for (let xDelta = -1; xDelta <= 1; xDelta++) {
+				for (let yDelta = -1; yDelta <= 1; yDelta++) {
+					// Skip the cell itself
+					if (xDelta === 0 && yDelta === 0) continue;
 
-          if (getCellAt([x + xDelta, y + yDelta])) livingNeighbors++;
-        }
-      }
-      if (!alive && livingNeighbors === 3) {
-        c |= 1 << y;
-      }
-      if (alive && 2 <= livingNeighbors && livingNeighbors <= 3) {
-        c |= 1 << y;
-      }
-    }
-    stasisReached &&= c === this._cells[x];
-    this._nextTick.push(c);
-  }
+					if (getCellAt([x + xDelta, y + yDelta])) livingNeighbors++;
+				}
+			}
+			if (!alive && livingNeighbors === 3) {
+				c |= 1 << y;
+			}
+			if (alive && 2 <= livingNeighbors && livingNeighbors <= 3) {
+				c |= 1 << y;
+			}
+		}
+		stasisReached &&= c === this._cells[x];
+		this._nextTick.push(c);
+	}
 
-  return stasisReached;
+	return stasisReached;
 };
 
 Chunk.prototype.setNextTick = function () {
-  console.assert(!!this._nextTick);
-  this._cells = this._nextTick;
-  this._nextTick = undefined;
+	console.assert(!!this._nextTick);
+	this._cells = this._nextTick;
+	this._nextTick = undefined;
 };
 
 Chunk.prototype.render = function ([xChunk, yChunk], view, config, ctx) {
-  const { pan, zoom } = view;
-  const { cellSize, cellColor } = config;
-  const cellSizeScreen = cellSize * zoom;
-  const offset = add(
-    multiply([xChunk, yChunk], Chunk.SIZE * cellSizeScreen),
-    pan
-  );
+	const { pan, zoom } = view;
+	const { cellSize, cellColor } = config;
+	const cellSizeScreen = cellSize * zoom;
+	const offset = add(
+		multiply([xChunk, yChunk], Chunk.SIZE * cellSizeScreen),
+		pan,
+	);
 
-  ctx.fillStyle = cellColor;
-  for (let x = 0; x < Chunk.SIZE; x++) {
-    for (let y = 0, c = this._cells[x]; y < Chunk.SIZE; y++, c >>= 1) {
-      if (!(c & 1)) continue;
-      const [xScreen, yScreen] = add(offset, multiply([x, y], cellSizeScreen));
-      ctx.fillRect(xScreen, yScreen, cellSizeScreen, cellSizeScreen);
-    }
-  }
+	ctx.fillStyle = cellColor;
+	for (let x = 0; x < Chunk.SIZE; x++) {
+		for (let y = 0, c = this._cells[x]; y < Chunk.SIZE; y++, c >>= 1) {
+			if (!(c & 1)) continue;
+			const [xScreen, yScreen] = add(offset, multiply([x, y], cellSizeScreen));
+			ctx.fillRect(xScreen, yScreen, cellSizeScreen, cellSizeScreen);
+		}
+	}
 
-  // Draw chunk borders for debugging
-  function debug() {
-    const [xOffset, yOffset] = offset;
-    ctx.strokeStyle = "black";
-    ctx.lineWidth = 4;
-    ctx.strokeRect(
-      xOffset,
-      yOffset,
-      Chunk.SIZE * cellSizeScreen,
-      Chunk.SIZE * cellSizeScreen
-    );
-    ctx.font = `${32 * zoom}px Arial`;
-    ctx.fillStyle = "gray";
-    ctx.fillText(
-      `Chunk x=${xChunk}, y=${yChunk}`,
-      xOffset,
-      yOffset + 32 * zoom
-    );
-  }
-  // debug();
+	// Draw chunk borders for debugging
+	function debug() {
+		const [xOffset, yOffset] = offset;
+		ctx.strokeStyle = "black";
+		ctx.lineWidth = 4;
+		ctx.strokeRect(
+			xOffset,
+			yOffset,
+			Chunk.SIZE * cellSizeScreen,
+			Chunk.SIZE * cellSizeScreen,
+		);
+		ctx.font = `${32 * zoom}px Arial`;
+		ctx.fillStyle = "gray";
+		ctx.fillText(
+			`Chunk x=${xChunk}, y=${yChunk}`,
+			xOffset,
+			yOffset + 32 * zoom,
+		);
+	}
+	// debug();
 };
 
 export default Chunk;
